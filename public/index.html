@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" type="text/css" href="css/style.css" />
+    <title>The sirup race</title>
+    <!-- MQTT.js Client -->
+    <script src="js/mqtt.min.js"></script>
+    <script src="/config.js"></script>
+    <!--    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script> -->
+    <style>
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .container {
+        display: flex;
+        width: 100%;
+        justify-content: center;
+        position: relative;
+      }
+      .button-container {
+        /*flex: 1;*/
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        position: relative;
+        margin: 0 50px; /* 50px Abstand zu beiden Seiten */
+      }
+      /*       .button-container {
+            position: relative;
+            display: inline-block;
+            margin: 10px;
+        }*/
+      img {
+        width: 380px;
+        height: 380px;
+        /*cursor: pointer;*/
+      }
+      .disabled {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+      .spinner {
+        display: none;
+        width: 50px;
+        height: 50px;
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+      .disabled + .spinner {
+        display: block;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="button-container">
+        <img
+          id="button1"
+          src="static/Fraise.png"
+          alt="Button 1"
+          onclick="sendMessage(1)"
+        />
+        <div class="spinner" id="spinner1"></div>
+      </div>
+      <div class="button-container">
+        <img
+          id="button2"
+          src="static/IceTea.png"
+          alt="Button 2"
+          onclick="sendMessage(2)"
+        />
+        <div class="spinner" id="spinner2"></div>
+      </div>
+      <div class="button-container">
+        <img
+          id="button3"
+          src="static/Passion.png"
+          alt="Button 3"
+          onclick="sendMessage(3)"
+        />
+        <div class="spinner" id="spinner3"></div>
+      </div>
+    </div>
+
+    <script>
+      // Create MQTT client and connect it
+      const MQTT_PORT = window.APP_CONFIG?.MQTT_PORT || 8090
+      const MQTT_HOST = window.APP_CONFIG?.MQTT_HOST || window.location.hostname
+      const MQTT_TOPIC_PREFIX =
+        window.APP_CONFIG?.MQTT_TOPIC_PREFIX || 'heiafr/ms'
+      const DONE_TOPIC = `${MQTT_TOPIC_PREFIX}/controller/done`
+      const BUTTON_TOPIC = `${MQTT_TOPIC_PREFIX}/controller/button`
+      const MQTT_URL = `ws://${MQTT_HOST}:${MQTT_PORT}`
+      const client = mqtt.connect(MQTT_URL)
+      const MAX_WAITING_TIME = 30000 // in msecs
+
+      let timeouts = {}
+
+      // Get message and release button if correct message
+      client.on('message', function (topic, message) {
+        const buttonId = parseInt(message.toString())
+        if (buttonId >= 1 && buttonId <= 3) {
+          enableButton(buttonId)
+        }
+      })
+
+      client.on('connect', function () {
+        console.log('Connected to MQTT')
+        // Subscribe to topic for signaling end of sirup creation
+        client.subscribe(DONE_TOPIC)
+      })
+
+      client.on('error', function (error) {
+        console.error('MQTT connection failure: ', error)
+      })
+
+      function sendMessage(buttonId) {
+        const button = document.getElementById(`button${buttonId}`)
+        const spinner = document.getElementById(`spinner${buttonId}`)
+        button.classList.add('disabled')
+        // Show spinner
+        spinner.style.display = 'block'
+        // Send the correct message to the broker
+        client.publish(BUTTON_TOPIC, String(buttonId))
+
+        // Set timeout to release button max 45 seconds
+        timeouts[buttonId] = setTimeout(() => {
+          enableButton(buttonId)
+          console.warn(`Button ${buttonId} released after max waiting time.`)
+        }, MAX_WAITING_TIME)
+      }
+
+      function enableButton(buttonId) {
+        const button = document.getElementById(`button${buttonId}`)
+        const spinner = document.getElementById(`spinner${buttonId}`)
+        button.classList.remove('disabled')
+        // Disable spinner
+        spinner.style.display = 'none'
+
+        // Reset timeout, because of MQTT message
+        if (timeouts[buttonId]) {
+          clearTimeout(timeouts[buttonId])
+          delete timeouts[buttonId]
+        }
+      }
+    </script>
+  </body>
+</html>
