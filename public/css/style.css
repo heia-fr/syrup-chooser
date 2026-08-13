@@ -6,6 +6,8 @@ html {
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none !important;
+  overflow: hidden !important;
 }
 .container {
   display: flex;
