@@ -109,6 +109,30 @@ Role:
 - Sent by controller when requested action is finished.
 - UI re-enables matching button and hides spinner.
 
+### 3. Maintenance topic (controller to UI)
+
+Topic:
+
+- <MQTT_TOPIC_PREFIX>/controller/maintenance
+
+Payload:
+
+- Text to display (UTF-8 string) to enter maintenance mode, empty to leave it
+
+Role:
+
+- UI shows the text in an overlay over the buttons and blocks clicks while active.
+- Publish with the retain flag so that pages loaded later also get the current state.
+
+Example:
+
+```sh
+# Enter maintenance mode
+mosquitto_pub -t heiafr/ms/controller/maintenance -r -m "La machine fait le plein !"
+# Leave maintenance mode and clear the retained message
+mosquitto_pub -t heiafr/ms/controller/maintenance -r -n
+```
+
 ## UI flow
 
 1. User clicks button 1, 2, or 3.

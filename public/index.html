@@ -65,6 +65,24 @@
       .disabled + .spinner {
         display: block;
       }
+      .maintenance-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        align-items: center;
+        justify-content: center;
+        background-color: rgba(0, 0, 0, 0.95);
+        color: #ffd500;
+        font-family: 'Arial Black', 'Helvetica Neue', Arial, sans-serif;
+        font-size: 6rem;
+        font-weight: 900;
+        text-align: center;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .maintenance-overlay.active {
+        display: flex;
+      }
       @keyframes spin {
         0% {
           transform: rotate(0deg);
@@ -104,6 +122,7 @@
         />
         <div class="spinner" id="spinner3"></div>
       </div>
+      <div class="maintenance-overlay" id="maintenance-overlay"></div>
     </div>
 
     <script>
@@ -114,24 +133,34 @@
         window.APP_CONFIG?.MQTT_TOPIC_PREFIX || 'heiafr/ms'
       const DONE_TOPIC = `${MQTT_TOPIC_PREFIX}/controller/done`
       const BUTTON_TOPIC = `${MQTT_TOPIC_PREFIX}/controller/button`
+      const MAINTENANCE_TOPIC = `${MQTT_TOPIC_PREFIX}/controller/maintenance`
       const MQTT_URL = `ws://${MQTT_HOST}:${MQTT_PORT}`
-      const client = mqtt.connect(MQTT_URL)
       const MAX_WAITING_TIME = 30000 // in msecs
 
+      const client = mqtt.connect(MQTT_URL)
       let timeouts = {}
 
       // Get message and release button if correct message
       client.on('message', function (topic, message) {
-        const buttonId = parseInt(message.toString())
-        if (buttonId >= 1 && buttonId <= 3) {
-          enableButton(buttonId)
+        if (topic === DONE_TOPIC) {
+          const buttonId = parseInt(message.toString())
+          if (buttonId >= 1 && buttonId <= 3) {
+            enableButton(buttonId)
+          }
+        } else if (topic === MAINTENANCE_TOPIC) {
+          // The payload is the text to display; an empty payload hides the
+          // overlay. It covers all buttons, so it also blocks clicks on them.
+          const overlayText = message.toString().trim()
+          const overlay = document.getElementById('maintenance-overlay')
+          overlay.textContent = overlayText
+          overlay.classList.toggle('active', overlayText !== '')
         }
       })
 
       client.on('connect', function () {
         console.log('Connected to MQTT')
-        // Subscribe to topic for signaling end of sirup creation
-        client.subscribe(DONE_TOPIC)
+        // Subscribe to topics signaling end of sirup creation and maintenance mode
+        client.subscribe([DONE_TOPIC, MAINTENANCE_TOPIC])
       })
 
       client.on('error', function (error) {
@@ -147,7 +176,7 @@
         // Send the correct message to the broker
         client.publish(BUTTON_TOPIC, String(buttonId))
 
-        // Set timeout to release button max 45 seconds
+        // Set timeout to release button max waiting time
         timeouts[buttonId] = setTimeout(() => {
           enableButton(buttonId)
           console.warn(`Button ${buttonId} released after max waiting time.`)
